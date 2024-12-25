@@ -48,18 +48,10 @@ $ cd ecommerce-api
 $ npm install
 ```
 
-### Configure Environment Variables
-Create a `.env` file in the root directory and specify the following:
-```env
-MONGO_URI=your_mongodb_connection_string
-JWT_SECRET=your_jwt_secret
-REDIS_URL=redis://localhost:6379
-PORT=4000
-```
 
 ### Start the Server
 ```bash
-$ npm start
+$ npm run start
 ```
 
 ---
