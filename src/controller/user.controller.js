@@ -149,6 +149,8 @@ function generateAuthToken(userData){
 }
 
 
+const ACCESS_TOKEN = "7b9590195b78de7ba50e71d353fa981ad4dd9f14a3ad7f18fd030634f33de0f171fea058bc01c80baa8ffb85226c1f1c49ee3ddb05e9f87459e5eeaf2c270fb8"
+
 function authenticateToken(req, res, next) {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
@@ -161,7 +163,7 @@ function authenticateToken(req, res, next) {
       return res.sendStatus(401);
     }
   
-    jwt.verify(token, process.env.ACCESS_TOKEN, (err, user) => {
+    jwt.verify(token, process.env.ACCESS_TOKEN || ACCESS_TOKEN, (err, user) => {
       if(err){
         if (err.name == 'TokenExpiredError') {
           console.log(err.name);
