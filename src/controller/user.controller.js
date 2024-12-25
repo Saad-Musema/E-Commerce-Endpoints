@@ -1,36 +1,46 @@
 const User = require("../model/user.mongo")
 const libphonenumber = require('libphonenumber-js');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt')
+const process = require('process')
 
 const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
 
 async function createUser(req, res) {
-        const user = new User(req.body);
-    if( await User.findOne({email: user.email})){
+    const user = new User(req.body);
+
+    // Check if user with the same email already exists
+    if (await User.findOne({ email: user.email })) {
         return res.status(409).send("User with this Email already exists");
     }
 
-    user.phoneNumber = libphonenumber.parsePhoneNumber(user.phoneNumber, 'ET').number;
-    if(!libphonenumber.isValidPhoneNumber(user.phoneNumber)){
+    user.phoneNumber = libphonenumber.parsePhoneNumberWithError(user.phoneNumber, 'ET').number;
+        if(!libphonenumber.isValidPhoneNumber(user.phoneNumber)){
 
-        console.log("Not Valid Phone Number");
-        return res.status(409).send("Invalid Phone Number");
-    }
+            console.log("Not Valid Phone Number");
+            return res.status(409).send("Invalid Phone Number");
+        }
 
+    // Validate password
     if (!isPasswordValid(user.password)) {
-    console.log("Password is valid");
-    return res.status(409).send("Password is Invalid! Please Include special charater, lowercase, uppercase and number")
+        console.log("Password is invalid");
+        return res.status(409).send("Password is Invalid! Please include a special character, lowercase, uppercase, and number");
     }
 
     try {
-        // const refresh_token = jwt.sign(userData, process.env.refresh_token);
-        // user.refreshToken = refresh_token;
-        await user.save(user);
+        // Hash the password
+        const saltRounds = 10; // Adjust this according to your security needs
+        user.password = await bcrypt.hash(user.password, saltRounds);
+
+        // Save the user
+        await user.save();
         res.status(201).send(user);
     } catch (error) {
         console.log(error.message);
         res.status(500).send('Internal Server Error');
     }
-};
+}
+
 
 function isPasswordValid(password) {
     return passwordRegex.test(password);
@@ -42,7 +52,7 @@ function isPasswordValid(password) {
 async function loginUser(req, res){
     
     try {
-
+        console.log(req.body.email)
         const user = await User.findOne({email: req.body.email});
         console.log(user);
         if(!user){
@@ -107,17 +117,64 @@ async function deleteUser(req, res) {
 
 async function updateUser(req, res) {
     try {
-        const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+        const username = req.params.username;
+        const updateData = req.body;
+
+        // Log the incoming data for debugging
+        console.log(`Updating user with username: ${username}`);
+        console.log('Update data:', updateData);
+
+        // Validate that updateData is not empty
+        if (!updateData || Object.keys(updateData).length === 0) {
+            return res.status(400).send("No update data provided");
+        }
+
+        const user = await User.findOneAndUpdate({ username: username }, updateData, { new: true, runValidators: true });
+
+        // Log the result of the update operation
+        console.log('Update result:', user);
+
         if (!user) {
             return res.status(404).send("User not found");
         }
         res.status(200).send(user);
     } catch (error) {
-        console.log(error.message);
+        console.log('Error updating user:', error.message);
         res.status(500).send('Internal Server Error');
     }
 }
 
+function generateAuthToken(userData){
+    return jwt.sign(userData, process.env.ACCESS_TOKEN, { expiresIn: '1 hr' });
+}
 
 
-module.exports = {createUser, loginUser, deleteUser};
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+  
+    const refreshToken = authHeader && authHeader
+  
+    console.log(refreshToken)
+    
+    if (token === null || token === undefined) {
+      return res.sendStatus(401);
+    }
+  
+    jwt.verify(token, process.env.ACCESS_TOKEN, (err, user) => {
+      if(err){
+        if (err.name == 'TokenExpiredError') {
+          console.log(err.name);
+          return res.status(403).send("Token Expired");
+        }
+      }
+  
+      req.user = user;
+      console.log(user);
+      next();
+    });
+  }
+
+
+
+module.exports = {createUser, loginUser, deleteUser, updateUser, authenticateToken};
